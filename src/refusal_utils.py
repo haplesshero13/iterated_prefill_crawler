@@ -215,6 +215,15 @@ def check_refusal(
         queries = all_queries[start_idx:end_idx]
         prompts = all_query_input_strs[start_idx:end_idx]
 
+        # Drop empty strings produced by incomplete <think> rollouts (the model
+        # started a thinking block but ran out of tokens before </think>, so
+        # remove_thinking_context returns "" for those entries).  If every query
+        # for this topic was truncated, fall back to a plain topic-label probe so
+        # we still have something to send to the answer-generation step.
+        queries = [q for q in queries if q.strip()]
+        if not queries:
+            queries = [f"Tell me about {topic.shortened or topic.raw}"]
+
         refused_to_make_query = check_refusals_cascade(
             queries, config, refusal_model, refusal_tokenizer
         )
@@ -258,6 +267,10 @@ def check_refusal(
                 )[-1].strip(" <>|:")
                 for query in queries
             ]
+            # Drop any that became empty after stripping role markers / think tags.
+            extracted_queries = [q for q in extracted_queries if q.strip()]
+            if not extracted_queries:
+                extracted_queries = [f"Tell me about {topic.shortened or topic.raw}"]
             all_answer_prompts.extend(extracted_queries)
             answer_topic_indices.extend([topic_idx] * len(extracted_queries))
 
