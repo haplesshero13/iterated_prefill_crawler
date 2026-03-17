@@ -6,6 +6,17 @@ from src.crawler.topic_queue import Topic, TopicQueue
 TemplateDict = Dict[str, List[str]]
 
 
+def _fill_template(template: str, topic: str) -> str:
+    """Format a template string with a topic, filling all {} placeholders.
+
+    Jailbreak templates often repeat the topic in multiple places (e.g. to
+    exclude it from enumerations, or to reinforce context). Plain
+    `.format(topic)` raises IndexError when there is more than one placeholder,
+    so we replicate the topic to match the count.
+    """
+    return template.format(*([topic] * template.count("{}")))
+
+
 class PromptBuilder:
     """
     Prompt Builder
@@ -77,7 +88,7 @@ class PromptBuilder:
             user_topic = random.choice(
                 self.user_seed_topics.head_refusal_topics
             ).__getattribute__(lang)
-            user_mid_msg = user_temp.format(user_topic)
+            user_mid_msg = _fill_template(user_temp, user_topic)
             user_parts.append(user_mid_msg)
 
         if self.user_post:
@@ -192,7 +203,9 @@ class PromptBuilder:
             ]
             parent_ids = [t.id for t in sampled_topics]
             user_msgs = [
-                random.choice(self.user_seed_template[lang]).format(getattr(t, lang))
+                _fill_template(
+                    random.choice(self.user_seed_template[lang]), getattr(t, lang)
+                )
                 for t in sampled_topics
             ]
         else:
@@ -219,8 +232,7 @@ class PromptBuilder:
             ]
         else:
             messages = [
-                [{"role": "user", "content": user_msg}]
-                for user_msg in user_msgs
+                [{"role": "user", "content": user_msg}] for user_msg in user_msgs
             ]
 
         if self.system_templates:
